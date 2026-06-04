@@ -7,7 +7,8 @@ const redisPort = parseInt(process.env.REDIS_PORT || '6379');
 const redisClient = new Redis({
   host: redisHost,
   port: redisPort,
-  maxRetriesPerRequest: null, // Essential setting for BullMQ
+  password: process.env.REDIS_PASSWORD,
+  maxRetriesPerRequest: null,
 });
 
 redisClient.on('connect', () => {
