@@ -14,8 +14,9 @@ class PipelineController {
 
   async listStages(req, res) {
     try {
+      const orgId = req.user.organizationId;
       const { id } = req.params; // pipelineId
-      const stages = await pipelineRepository.listStages(id);
+      const stages = await pipelineRepository.listStages(id, orgId);
       return res.json(stages);
     } catch (error) {
       console.error('[PipelineController] listStages error:', error);

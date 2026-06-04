@@ -7,9 +7,14 @@ class PipelineRepository {
     return result.rows;
   }
 
-  async listStages(pipelineId) {
-    const query = 'SELECT * FROM pipeline_stages WHERE pipeline_id = $1 ORDER BY order_index ASC';
-    const result = await db.query(query, [pipelineId]);
+  async listStages(pipelineId, orgId) {
+    const query = `
+      SELECT ps.* FROM pipeline_stages ps
+      INNER JOIN pipelines p ON ps.pipeline_id = p.id
+      WHERE ps.pipeline_id = $1 AND p.organization_id = $2
+      ORDER BY ps.order_index ASC
+    `;
+    const result = await db.query(query, [pipelineId, orgId]);
     return result.rows;
   }
 
