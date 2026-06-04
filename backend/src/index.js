@@ -1,5 +1,6 @@
-const express = require('express');
+require('dotenv').config();
 require('./config/sentry');
+
 const express = require('express');
 const http = require('http');
 const { Server } = require('socket.io');
@@ -16,14 +17,17 @@ if (process.env.NODE_ENV === 'production') {
     logger.error('[Boot] CRITICAL: ENCRYPTION_KEY must be set to a secure, custom 32-byte secret in production!');
     process.exit(1);
   }
+
   if (!process.env.JWT_SECRET || process.env.JWT_SECRET === 'supersecretjwtkey') {
     logger.error('[Boot] CRITICAL: JWT_SECRET must be set to a secure, custom secret in production!');
     process.exit(1);
   }
 }
+
 const httpLogger = require('./middlewares/logMiddleware');
 const db = require('./config/db');
 const redisClient = require('./config/redis');
+
 const authRoutes = require('./routes/authRoutes');
 const contactRoutes = require('./routes/contactRoutes');
 const conversationRoutes = require('./routes/conversationRoutes');
@@ -33,13 +37,19 @@ const webhookRoutes = require('./routes/webhookRoutes');
 
 const app = express();
 
+// Required when running behind Coolify / reverse proxy.
+// Fixes ERR_ERL_UNEXPECTED_X_FORWARDED_FOR from express-rate-limit.
 app.set('trust proxy', 1);
 
 const server = http.createServer(app);
+
+const frontendUrl = process.env.FRONTEND_URL;
+
 const io = new Server(server, {
   cors: {
-    origin: '*', // Allow all origins for dev; configure specifically for production
+    origin: frontendUrl || '*',
     methods: ['GET', 'POST'],
+    credentials: true,
   },
 });
 
@@ -50,24 +60,30 @@ require('./utils/socket').set(io);
 const PORT = process.env.PORT || 5000;
 
 // Middleware
-app.use(helmet({ contentSecurityPolicy: false })); // Excludes tight CSP for local React dev assets
+app.use(helmet({ contentSecurityPolicy: false }));
 
-const frontendUrl = process.env.FRONTEND_URL;
 app.use(cors({
   origin: (origin, callback) => {
-    // If no origin (e.g. mobile apps, curl), allow it
     if (!origin) {
-      callback(null, true);
-    } else if (!frontendUrl || origin === frontendUrl || origin.startsWith('http://localhost:') || origin.startsWith('http://127.0.0.1:')) {
-      callback(null, true);
-    } else {
-      callback(new Error('Not allowed by CORS'));
+      return callback(null, true);
     }
+
+    if (
+      !frontendUrl ||
+      origin === frontendUrl ||
+      origin.startsWith('http://localhost:') ||
+      origin.startsWith('http://127.0.0.1:')
+    ) {
+      return callback(null, true);
+    }
+
+    return callback(new Error('Not allowed by CORS'));
   },
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization']
+  allowedHeaders: ['Content-Type', 'Authorization'],
 }));
+
 app.use(express.json());
 app.use(httpLogger);
 
@@ -82,7 +98,7 @@ app.use('/api/pipelines', pipelineRoutes);
 app.use('/api/settings', settingsRoutes);
 app.use('/api/webhooks', webhookRoutes);
 
-// Health probes for DevOps monitoring (Coolify / Kubernetes)
+// Health probes for DevOps monitoring
 app.get('/api/health/live', (req, res) => {
   return res.json({ status: 'UP' });
 });
@@ -92,8 +108,8 @@ app.get('/api/health/ready', async (req, res) => {
     const dbCheck = await db.query('SELECT 1');
     const redisCheck = await redisClient.ping();
 
-    // Fetch queue statistics
     let queueStats = null;
+
     try {
       const { webhookQueue } = require('./services/queue/webhookQueue');
       queueStats = await webhookQueue.getJobCounts('active', 'wait', 'failed', 'completed');
@@ -103,11 +119,14 @@ app.get('/api/health/ready', async (req, res) => {
 
     if (dbCheck.rowCount !== 1 || redisCheck !== 'PONG') {
       logger.error('[Health Check] Service ready check failed: services DOWN');
+
       return res.status(503).json({
         status: 'DOWN',
-        database: dbCheck.rowCount === 1 ? 'healthy' : 'unhealthy',
-        redis: redisCheck === 'PONG' ? 'healthy' : 'unhealthy',
-        queue: queueStats
+        services: {
+          database: dbCheck.rowCount === 1 ? 'healthy' : 'unhealthy',
+          redis: redisCheck === 'PONG' ? 'healthy' : 'unhealthy',
+        },
+        queue: queueStats,
       });
     }
 
@@ -115,15 +134,16 @@ app.get('/api/health/ready', async (req, res) => {
       status: 'READY',
       services: {
         database: 'healthy',
-        redis: 'healthy'
+        redis: 'healthy',
       },
-      queue: queueStats
+      queue: queueStats,
     });
   } catch (error) {
     logger.error('[Health Check] Exception during ready check:', error);
+
     return res.status(503).json({
       status: 'DOWN',
-      error: error.message
+      error: error.message,
     });
   }
 });
@@ -134,6 +154,7 @@ const JWT_SECRET = process.env.JWT_SECRET || 'supersecretjwtkey';
 
 io.use((socket, next) => {
   const token = socket.handshake.auth?.token || socket.handshake.query?.token;
+
   if (!token) {
     return next(new Error('Authentication error: Token is required'));
   }
@@ -142,15 +163,18 @@ io.use((socket, next) => {
     if (err) {
       return next(new Error('Authentication error: Invalid or expired token'));
     }
-    socket.user = decoded; // { userId, organizationId, role }
-    next();
+
+    socket.user = decoded;
+    return next();
   });
 });
 
 // Socket.io real-time connection handler
 io.on('connection', (socket) => {
   const orgId = socket.user.organizationId;
+
   socket.join(orgId);
+
   logger.info(`Socket connected: ${socket.id} | User: ${socket.user.userId} | Org: ${orgId}`);
 
   socket.on('disconnect', () => {
