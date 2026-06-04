@@ -1,4 +1,4 @@
-require('dotenv').config();
+const express = require('express');
 require('./config/sentry');
 const express = require('express');
 const http = require('http');
@@ -32,6 +32,9 @@ const settingsRoutes = require('./routes/settingsRoutes');
 const webhookRoutes = require('./routes/webhookRoutes');
 
 const app = express();
+
+app.set('trust proxy', 1);
+
 const server = http.createServer(app);
 const io = new Server(server, {
   cors: {
@@ -134,7 +137,7 @@ io.use((socket, next) => {
   if (!token) {
     return next(new Error('Authentication error: Token is required'));
   }
-  
+
   jwt.verify(token, JWT_SECRET, (err, decoded) => {
     if (err) {
       return next(new Error('Authentication error: Invalid or expired token'));
