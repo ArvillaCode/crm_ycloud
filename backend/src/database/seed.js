@@ -41,13 +41,17 @@ async function seed() {
     // 3. Hash passwords and insert Users
     const agentHash = await bcrypt.hash('carlos123', 10);
     const adminHash = await bcrypt.hash('admin123', 10);
+    const gymAdminHash = await bcrypt.hash('GymAdmin2026!', 10);
+
+    const gymOrgId = orgs[2].id; // Gym Fitness Club
 
     const usersRes = await db.query(`
       INSERT INTO users (organization_id, name, email, password_hash, role) VALUES
       ($1, 'Carlos Agente', 'carlos@company.com', $2, 'agent'),
-      ($1, 'Admin General', 'admin@company.com', $3, 'admin')
+      ($1, 'Admin General', 'admin@company.com', $3, 'admin'),
+      ($4, 'Admin Gym', 'admin@company.com', $5, 'admin')
       RETURNING id, name, role
-    `, [primaryOrgId, agentHash, adminHash]);
+    `, [primaryOrgId, agentHash, adminHash, gymOrgId, gymAdminHash]);
     const users = usersRes.rows;
     console.log(`[Seeder] Seeded ${users.length} users.`);
 
