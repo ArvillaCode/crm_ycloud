@@ -30,6 +30,7 @@ const redisClient = require('./config/redis');
 
 const authRoutes = require('./routes/authRoutes');
 const contactRoutes = require('./routes/contactRoutes');
+const tagRoutes = require('./routes/tagRoutes');
 const conversationRoutes = require('./routes/conversationRoutes');
 const pipelineRoutes = require('./routes/pipelineRoutes');
 const settingsRoutes = require('./routes/settingsRoutes');
@@ -93,6 +94,7 @@ app.use('/uploads', express.static(path.join(__dirname, '../public/uploads')));
 // Routes
 app.use('/api/auth', authRoutes);
 app.use('/api/contacts', contactRoutes);
+app.use('/api/tags', tagRoutes);
 app.use('/api/conversations', conversationRoutes);
 app.use('/api/pipelines', pipelineRoutes);
 app.use('/api/settings', settingsRoutes);

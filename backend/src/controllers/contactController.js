@@ -37,7 +37,7 @@ class ContactController {
     try {
       const orgId = req.user.organizationId;
       const userId = req.user.userId;
-      const { name, phone, email, company, notes, pipelineStageId, assignedUserId } = req.body;
+      const { name, phone, email, company, notes, pipelineStageId, assignedUserId, tagIds } = req.body;
 
       if (!name || !phone) {
         return res.status(400).json({ error: 'Name and phone number are required' });
@@ -65,6 +65,7 @@ class ContactController {
         notes: notes === '' ? null : notes,
         pipelineStageId: cleanPipelineStageId,
         assignedUserId: cleanAssignedUserId || userId,
+        tagIds: tagIds || []
       });
 
       // Audit Log
@@ -85,7 +86,7 @@ class ContactController {
       if (error.code === '22P02') {
         return res.status(400).json({ error: 'Formato de identificador UUID no válido.' });
       }
-      return res.status(500).json({ error: 'Internal server error' });
+      return res.status(500).json({ error: error.message || 'Internal server error' });
     }
   }
 
@@ -95,6 +96,7 @@ class ContactController {
       const userId = req.user.userId;
       const { id } = req.params;
       const fields = req.body;
+      const { tagIds } = req.body;
 
       const oldContact = await contactRepository.findById(id, orgId);
       if (!oldContact) {
@@ -131,7 +133,7 @@ class ContactController {
         }
       }
 
-      const updated = await contactRepository.update(id, orgId, mappedFields);
+      const updated = await contactRepository.update(id, orgId, mappedFields, tagIds);
       if (!updated) {
         return res.status(400).json({ error: 'No valid fields provided or update failed' });
       }

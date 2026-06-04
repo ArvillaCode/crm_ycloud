@@ -24,7 +24,8 @@ const contactSchemas = {
     company: Joi.string().max(100).allow(null, ''),
     notes: Joi.string().max(1000).allow(null, ''),
     pipelineStageId: Joi.string().uuid().allow(null, ''),
-    assignedUserId: Joi.string().uuid().allow(null, '')
+    assignedUserId: Joi.string().uuid().allow(null, ''),
+    tagIds: Joi.array().items(Joi.string().uuid()).allow(null)
   }),
 
   update: Joi.object({
@@ -34,7 +35,15 @@ const contactSchemas = {
     company: Joi.string().max(100).allow(null, ''),
     notes: Joi.string().max(1000).allow(null, ''),
     pipelineStageId: Joi.string().uuid().allow(null, ''),
-    assignedUserId: Joi.string().uuid().allow(null, '')
+    assignedUserId: Joi.string().uuid().allow(null, ''),
+    tagIds: Joi.array().items(Joi.string().uuid()).allow(null)
+  })
+};
+
+const tagSchemas = {
+  upsert: Joi.object({
+    name: Joi.string().min(2).max(100).required(),
+    color: Joi.string().pattern(/^#[0-9A-F]{6}$/i).default('#E2E8F0')
   })
 };
 
@@ -57,5 +66,6 @@ module.exports = {
   authSchemas,
   contactSchemas,
   messageSchemas,
-  settingsSchemas
+  settingsSchemas,
+  tagSchemas
 };

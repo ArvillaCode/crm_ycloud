@@ -1,5 +1,6 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Plus, Edit2, Trash2, MessageSquare, Check, X } from 'lucide-react';
+import crmService from '../services/crmService';
 
 export function Contacts({ 
   contacts = [], 
@@ -20,8 +21,29 @@ export function Contacts({
     company: '',
     notes: '',
     pipelineStageId: '',
+    tagIds: []
   });
   const [formErrors, setFormErrors] = useState({});
+
+  // Tags States
+  const [availableTags, setAvailableTags] = useState([]);
+  const [selectedFilterTagId, setSelectedFilterTagId] = useState('');
+  const [newTagName, setNewTagName] = useState('');
+  const [newTagColor, setNewTagColor] = useState('#3B82F6');
+  const [showNewTagForm, setShowNewTagForm] = useState(false);
+
+  const fetchTags = async () => {
+    try {
+      const tags = await crmService.getTags();
+      setAvailableTags(tags);
+    } catch (err) {
+      console.error('[Contacts] Failed to load tags:', err);
+    }
+  };
+
+  useEffect(() => {
+    fetchTags();
+  }, [contacts]); // Sync tags on contact list updates
 
   const openCreateModal = () => {
     setEditingContact(null);
@@ -32,8 +54,11 @@ export function Contacts({
       company: '',
       notes: '',
       pipelineStageId: stages[0]?.id || '',
+      tagIds: []
     });
     setFormErrors({});
+    setShowNewTagForm(false);
+    setNewTagName('');
     setModalOpen(true);
   };
 
@@ -46,9 +71,34 @@ export function Contacts({
       company: contact.company || '',
       notes: contact.notes || '',
       pipelineStageId: contact.pipeline_stage_id || '',
+      tagIds: (contact.tags || []).map(t => t.id)
     });
     setFormErrors({});
+    setShowNewTagForm(false);
+    setNewTagName('');
     setModalOpen(true);
+  };
+
+  const handleCreateTag = async (e) => {
+    e.preventDefault();
+    if (!newTagName.trim()) return;
+
+    try {
+      const tag = await crmService.createTag({
+        name: newTagName.trim(),
+        color: newTagColor
+      });
+      setAvailableTags(prev => [...prev, tag]);
+      setFormData(prev => ({
+        ...prev,
+        tagIds: [...prev.tagIds, tag.id]
+      }));
+      setNewTagName('');
+      setShowNewTagForm(false);
+    } catch (err) {
+      console.error('[Contacts] Error creating tag:', err);
+      alert('Error al crear la etiqueta');
+    }
   };
 
   const validateForm = () => {
@@ -97,6 +147,12 @@ export function Contacts({
     }
   };
 
+  // Filter contacts by tag
+  const filteredContacts = contacts.filter(c => {
+    if (!selectedFilterTagId) return true;
+    return (c.tags || []).some(t => t.id === selectedFilterTagId);
+  });
+
   return (
     <div className="flex-1 p-8 overflow-y-auto">
       <div className="flex justify-between items-center mb-6">
@@ -104,13 +160,32 @@ export function Contacts({
           <h2 className="text-lg font-bold text-slate-200">Base de Datos de Leads</h2>
           <p className="text-xs text-slate-400">Administra tus contactos asignados y su estado en el pipeline.</p>
         </div>
-        <button 
-          onClick={openCreateModal}
-          className="bg-emerald-600 hover:bg-emerald-500 text-white px-4 py-2 rounded-lg text-sm font-semibold transition flex items-center gap-2 shadow-lg shadow-emerald-600/10 active:scale-95"
-        >
-          <Plus className="w-4 h-4" />
-          <span>Nuevo Contacto</span>
-        </button>
+        <div className="flex items-center gap-3">
+          {/* Tag Filter */}
+          <div className="flex items-center gap-2 bg-slate-900/60 border border-slate-800 rounded-lg px-3 py-1.5">
+            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Filtrar por etiqueta:</span>
+            <select
+              value={selectedFilterTagId}
+              onChange={(e) => setSelectedFilterTagId(e.target.value)}
+              className="bg-transparent text-xs text-slate-200 outline-none cursor-pointer font-semibold border-none"
+            >
+              <option value="" className="bg-slate-900 text-slate-300">Todas las etiquetas</option>
+              {availableTags.map(tag => (
+                <option key={tag.id} value={tag.id} className="bg-slate-900" style={{ color: tag.color }}>
+                  {tag.name}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <button 
+            onClick={openCreateModal}
+            className="bg-emerald-600 hover:bg-emerald-500 text-white px-4 py-2 rounded-lg text-sm font-semibold transition flex items-center gap-2 shadow-lg shadow-emerald-600/10 active:scale-95"
+          >
+            <Plus className="w-4 h-4" />
+            <span>Nuevo Contacto</span>
+          </button>
+        </div>
       </div>
 
       {/* TABLE LIST */}
@@ -122,13 +197,13 @@ export function Contacts({
               <th className="p-4">WhatsApp</th>
               <th className="p-4">Email</th>
               <th className="p-4">Empresa</th>
+              <th className="p-4">Etiquetas</th>
               <th className="p-4">Etapa</th>
-              <th className="p-4">Notas</th>
               <th className="p-4 text-center">Acciones</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-800/50">
-            {contacts.map(c => {
+            {filteredContacts.map(c => {
               const stage = stages.find(s => s.id === c.pipeline_stage_id);
               return (
                 <tr key={c.id} className="hover:bg-slate-900/20 transition group">
@@ -137,11 +212,24 @@ export function Contacts({
                   <td className="p-4 text-slate-300">{c.email || '—'}</td>
                   <td className="p-4 text-slate-300">{c.company || '—'}</td>
                   <td className="p-4">
+                    <div className="flex gap-1.5 flex-wrap max-w-xs">
+                      {(c.tags || []).map(t => (
+                        <span 
+                          key={t.id} 
+                          className="text-[9px] px-2.5 py-0.5 rounded-full border font-medium"
+                          style={{ backgroundColor: t.color + '15', borderColor: t.color + '40', color: t.color }}
+                        >
+                          {t.name}
+                        </span>
+                      ))}
+                      {(!c.tags || c.tags.length === 0) && <span className="text-slate-600 text-xs">—</span>}
+                    </div>
+                  </td>
+                  <td className="p-4">
                     <span className="text-[10px] px-2.5 py-0.5 rounded-full border bg-emerald-500/10 text-emerald-300 border-emerald-500/30 font-medium">
                       {stage ? stage.name : 'Sin Etapa'}
                     </span>
                   </td>
-                  <td className="p-4 text-xs text-slate-400 truncate max-w-xs">{c.notes || '—'}</td>
                   <td className="p-4">
                     <div className="flex items-center justify-center gap-2">
                       <button 
@@ -170,7 +258,7 @@ export function Contacts({
                 </tr>
               );
             })}
-            {contacts.length === 0 && (
+            {filteredContacts.length === 0 && (
               <tr>
                 <td colSpan="7" className="p-8 text-center text-slate-500">No hay contactos registrados.</td>
               </tr>
@@ -267,6 +355,85 @@ export function Contacts({
                     <option key={s.id} value={s.id} className="bg-slate-900">{s.name}</option>
                   ))}
                 </select>
+              </div>
+
+              {/* Tags Selector & Creator */}
+              <div className="flex flex-col gap-1.5">
+                <div className="flex justify-between items-center">
+                  <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Etiquetas (Tags)</label>
+                  <button 
+                    type="button"
+                    onClick={() => setShowNewTagForm(!showNewTagForm)}
+                    className="text-[10px] font-bold text-emerald-400 hover:text-emerald-300 transition"
+                  >
+                    {showNewTagForm ? 'Cancelar' : '+ Nueva Etiqueta'}
+                  </button>
+                </div>
+
+                {showNewTagForm && (
+                  <div className="p-3 bg-slate-900/60 border border-slate-800 rounded-lg flex flex-col gap-2 mt-1 animate-in fade-in slide-in-from-top-1 duration-150">
+                    <div className="flex gap-2">
+                      <input 
+                        type="text"
+                        value={newTagName}
+                        onChange={(e) => setNewTagName(e.target.value)}
+                        placeholder="Nombre de la etiqueta..."
+                        className="glass-input rounded px-2.5 py-1 text-xs text-slate-200 flex-1"
+                      />
+                      <button 
+                        type="button"
+                        onClick={handleCreateTag}
+                        className="bg-emerald-600 hover:bg-emerald-500 text-white px-3 py-1 rounded text-xs font-semibold"
+                      >
+                        Crear
+                      </button>
+                    </div>
+                    <div className="flex gap-1.5 flex-wrap items-center mt-1">
+                      {['#3B82F6', '#EF4444', '#10B981', '#F59E0B', '#EC4899', '#8B5CF6', '#6B7280'].map(color => (
+                        <button
+                          key={color}
+                          type="button"
+                          onClick={() => setNewTagColor(color)}
+                          className={`w-5 h-5 rounded-full border transition-all ${
+                            newTagColor === color ? 'ring-2 ring-white scale-110' : 'border-slate-800'
+                          }`}
+                          style={{ backgroundColor: color }}
+                        />
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                <div className="flex gap-1.5 flex-wrap mt-1">
+                  {availableTags.map(tag => {
+                    const isSelected = formData.tagIds.includes(tag.id);
+                    return (
+                      <button
+                        key={tag.id}
+                        type="button"
+                        onClick={() => {
+                          setFormData(prev => {
+                            const tagIds = prev.tagIds.includes(tag.id)
+                              ? prev.tagIds.filter(id => id !== tag.id)
+                              : [...prev.tagIds, tag.id];
+                            return { ...prev, tagIds };
+                          });
+                        }}
+                        className={`text-[10px] px-2.5 py-1 rounded-full border transition font-semibold ${
+                          isSelected 
+                            ? 'bg-slate-100 text-slate-950 border-white font-bold scale-105 shadow-md shadow-white/5' 
+                            : 'bg-slate-900/40 text-slate-300 border-slate-800 hover:border-slate-700'
+                        }`}
+                        style={isSelected ? {} : { borderColor: tag.color + '50', color: tag.color }}
+                      >
+                        {tag.name}
+                      </button>
+                    );
+                  })}
+                  {availableTags.length === 0 && (
+                    <span className="text-[10px] text-slate-500 italic">No hay etiquetas creadas.</span>
+                  )}
+                </div>
               </div>
 
               <div className="flex flex-col gap-1">

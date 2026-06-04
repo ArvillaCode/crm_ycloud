@@ -126,7 +126,20 @@ export function Inbox({
                 {activeContact.name.substring(0, 2).toUpperCase()}
               </div>
               <div>
-                <span className="text-sm font-semibold text-slate-200 block leading-tight">{activeContact.name}</span>
+                <div className="flex items-center gap-2">
+                  <span className="text-sm font-semibold text-slate-200 block leading-tight">{activeContact.name}</span>
+                  <div className="flex gap-1 flex-wrap">
+                    {(activeContact.tags || []).map(t => (
+                      <span 
+                        key={t.id} 
+                        className="text-[8px] px-1.5 py-0.5 rounded border font-medium"
+                        style={{ backgroundColor: t.color + '15', borderColor: t.color + '30', color: t.color }}
+                      >
+                        {t.name}
+                      </span>
+                    ))}
+                  </div>
+                </div>
                 <span className="text-[10px] text-slate-400 font-mono">{activeContact.phone}</span>
               </div>
             </div>

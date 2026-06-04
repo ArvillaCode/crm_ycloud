@@ -510,6 +510,9 @@ function App() {
               contacts={contacts}
               stages={stages}
               onStageChange={handleUpdateContactStage}
+              onStartConversation={handleStartConversation}
+              onCreateContact={handleCreateContact}
+              onUpdateContact={handleUpdateContact}
             />
           )}
 
