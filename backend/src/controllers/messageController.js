@@ -9,7 +9,7 @@ class MessageController {
       const orgId = req.user.organizationId;
       const userId = req.user.userId;
       const { conversationId } = req.params;
-      const { body, messageType = 'text' } = req.body;
+      const { body, messageType = 'text', isInternal = false } = req.body;
 
       if (!body) {
         return res.status(400).json({ error: 'Message body is required' });
@@ -30,18 +30,29 @@ class MessageController {
       }
       const contactPhone = contactRes.rows[0].phone;
 
-      // 3. Call WhatsApp Service
-      const sendResult = await whatsappService.sendTextMessage(contactPhone, body);
+      let whatsappMessageId = null;
+      let direction = 'outgoing';
+      let status = 'sent';
+
+      if (isInternal) {
+        direction = 'internal';
+        status = 'delivered';
+      } else {
+        // 3. Call WhatsApp Service with organization ID
+        const sendResult = await whatsappService.sendTextMessage(contactPhone, body, orgId);
+        whatsappMessageId = sendResult.messageId;
+        status = sendResult.success ? 'sent' : 'failed';
+      }
       
       // 4. Store Message in DB
       const messageContent = { body };
       const newMessage = await messageRepository.create({
         conversationId,
-        whatsappMessageId: sendResult.messageId,
-        direction: 'outgoing',
+        whatsappMessageId,
+        direction,
         messageType,
         content: messageContent,
-        status: sendResult.success ? 'sent' : 'failed',
+        status,
       });
 
       // 5. Update Conversation preview and last message timestamp

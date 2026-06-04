@@ -90,6 +90,42 @@ class ConversationController {
       return res.status(500).json({ error: 'Internal server error' });
     }
   }
+
+  async create(req, res) {
+    try {
+      const orgId = req.user.organizationId;
+      const { contactId } = req.body;
+
+      if (!contactId) {
+        return res.status(400).json({ error: 'Contact ID is required' });
+      }
+
+      const contactRepository = require('../repositories/contactRepository');
+      const contact = await contactRepository.findById(contactId, orgId);
+      if (!contact) {
+        return res.status(404).json({ error: 'Contact not found' });
+      }
+
+      // Check if conversation already exists
+      let conversation = await conversationRepository.findByContactId(contactId, orgId);
+      if (!conversation) {
+        conversation = await conversationRepository.create({
+          organizationId: orgId,
+          contactId,
+          status: 'open'
+        });
+      }
+
+      // Pre-populate contact fields to match the shape of the conversation list
+      conversation.contact_name = contact.name;
+      conversation.contact_phone = contact.phone;
+
+      return res.status(201).json(conversation);
+    } catch (error) {
+      console.error('[ConversationController] create error:', error);
+      return res.status(500).json({ error: 'Internal server error' });
+    }
+  }
 }
 
 module.exports = new ConversationController();

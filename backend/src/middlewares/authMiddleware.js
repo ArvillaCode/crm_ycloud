@@ -10,7 +10,7 @@ function authenticateJWT(req, res, next) {
 
     jwt.verify(token, JWT_SECRET, (err, user) => {
       if (err) {
-        return res.status(403).json({ error: 'Forbidden: Invalid or expired token' });
+        return res.status(401).json({ error: 'Unauthorized: Invalid or expired token' });
       }
 
       req.user = user; // { userId, organizationId, role }

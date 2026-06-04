@@ -41,7 +41,8 @@ const contactSchemas = {
 const messageSchemas = {
   send: Joi.object({
     body: Joi.string().min(1).max(4096).required(),
-    messageType: Joi.string().valid('text', 'image', 'audio', 'video', 'document', 'template').default('text')
+    messageType: Joi.string().valid('text', 'image', 'audio', 'video', 'document', 'template').default('text'),
+    isInternal: Joi.boolean().default(false)
   })
 };
 

@@ -43,21 +43,28 @@ class ContactController {
         return res.status(400).json({ error: 'Name and phone number are required' });
       }
 
+      // Sanitize phone number (strip whitespace)
+      const cleanPhone = phone.replace(/\s+/g, '');
+
       // Check duplicate phone per org
-      const existing = await contactRepository.findByPhone(phone, orgId);
+      const existing = await contactRepository.findByPhone(cleanPhone, orgId);
       if (existing) {
-        return res.status(400).json({ error: 'Contact phone number already exists in this organization' });
+        return res.status(400).json({ error: 'El teléfono del contacto ya existe en esta organización.' });
       }
+
+      // Normalize empty strings to null to avoid UUID formatting exceptions in PostgreSQL
+      const cleanPipelineStageId = pipelineStageId === '' || pipelineStageId === undefined ? null : pipelineStageId;
+      const cleanAssignedUserId = assignedUserId === '' || assignedUserId === undefined ? null : assignedUserId;
 
       const newContact = await contactRepository.create({
         organizationId: orgId,
         name,
-        phone,
-        email,
-        company,
-        notes,
-        pipelineStageId,
-        assignedUserId: assignedUserId || userId,
+        phone: cleanPhone,
+        email: email === '' ? null : email,
+        company: company === '' ? null : company,
+        notes: notes === '' ? null : notes,
+        pipelineStageId: cleanPipelineStageId,
+        assignedUserId: cleanAssignedUserId || userId,
       });
 
       // Audit Log
@@ -72,6 +79,12 @@ class ContactController {
       return res.status(201).json(newContact);
     } catch (error) {
       console.error('[ContactController] create error:', error);
+      if (error.code === '23505') {
+        return res.status(400).json({ error: 'El teléfono del contacto ya existe en esta organización.' });
+      }
+      if (error.code === '22P02') {
+        return res.status(400).json({ error: 'Formato de identificador UUID no válido.' });
+      }
       return res.status(500).json({ error: 'Internal server error' });
     }
   }
@@ -88,7 +101,37 @@ class ContactController {
         return res.status(404).json({ error: 'Contact not found' });
       }
 
-      const updated = await contactRepository.update(id, orgId, fields);
+      // Map camelCase fields to snake_case and normalize empty strings to null
+      const mappedFields = {};
+      const fieldMappings = {
+        name: 'name',
+        phone: 'phone',
+        email: 'email',
+        company: 'company',
+        notes: 'notes',
+        pipelineStageId: 'pipeline_stage_id',
+        pipeline_stage_id: 'pipeline_stage_id',
+        assignedUserId: 'assigned_user_id',
+        assigned_user_id: 'assigned_user_id',
+        lastMessageAt: 'last_message_at',
+        last_message_at: 'last_message_at'
+      };
+
+      for (const [key, val] of Object.entries(fields)) {
+        if (fieldMappings[key]) {
+          const dbField = fieldMappings[key];
+          // Strip spaces from phone
+          if (dbField === 'phone' && typeof val === 'string') {
+            mappedFields[dbField] = val.replace(/\s+/g, '');
+          } else if (val === '') {
+            mappedFields[dbField] = null;
+          } else {
+            mappedFields[dbField] = val;
+          }
+        }
+      }
+
+      const updated = await contactRepository.update(id, orgId, mappedFields);
       if (!updated) {
         return res.status(400).json({ error: 'No valid fields provided or update failed' });
       }
@@ -112,6 +155,12 @@ class ContactController {
       return res.json(updated);
     } catch (error) {
       console.error('[ContactController] update error:', error);
+      if (error.code === '23505') {
+        return res.status(400).json({ error: 'El teléfono del contacto ya existe en esta organización.' });
+      }
+      if (error.code === '22P02') {
+        return res.status(400).json({ error: 'Formato de identificador UUID no válido.' });
+      }
       return res.status(500).json({ error: 'Internal server error' });
     }
   }

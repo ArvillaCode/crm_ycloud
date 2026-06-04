@@ -5,6 +5,14 @@ dist/
 build/
 .env
 .env.*
+backend/.env
+backend/.env.*
+frontend/.env
+frontend/.env.*
+
+!.env.example
+!backend/.env.example
+!frontend/.env.example
 logs/
 uploads/
 backend/public/uploads/

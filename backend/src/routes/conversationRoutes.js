@@ -10,6 +10,7 @@ const router = express.Router();
 router.use(authenticateJWT);
 
 router.get('/', conversationController.list);
+router.post('/', conversationController.create);
 router.get('/:id', conversationController.get);
 router.put('/:id/status', conversationController.updateStatus);
 router.get('/:id/messages', conversationController.getMessages);

@@ -184,8 +184,8 @@ const webhookWorker = new Worker(
         let mimeType = 'application/octet-stream';
         let filename = `attachment.${msgType === 'document' ? 'pdf' : msgType === 'audio' ? 'ogg' : 'jpg'}`;
 
-        const settingsRes = await client.query("SELECT value FROM settings WHERE organization_id = $1 AND key = 'ycloud_api_key'", [orgId]);
-        const apiKeyObj = settingsRes.rowCount > 0 ? settingsRes.rows[0].value : null;
+        const settingsRepository = require('../../repositories/settingsRepository');
+        const apiKeyObj = await settingsRepository.get(orgId, 'ycloud_api_key');
 
         if (apiKeyObj && apiKeyObj.apiKey && mediaObj.id) {
           // If real API key is configured, download file via YCloud / Meta servers
