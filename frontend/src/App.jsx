@@ -8,28 +8,30 @@ import Pipeline from './components/Pipeline';
 import Settings from './components/Settings';
 import { Search, Lock } from 'lucide-react';
 
-const SOCKET_URL = import.meta.env.VITE_API_URL 
-  ? import.meta.env.VITE_API_URL.replace('/api', '') 
-  : 'http://localhost:5000';
+const SOCKET_URL =
+  import.meta.env.VITE_SOCKET_URL ||
+  (import.meta.env.VITE_API_URL
+    ? import.meta.env.VITE_API_URL.replace(/\/api\/?$/, '')
+    : 'http://localhost:5000');
 
 function App() {
   const [token, setToken] = useState(localStorage.getItem('token') || '');
   const [currentUser, setCurrentUser] = useState(null);
-  
+
   // Navigation & UI tabs
   const [activeTab, setActiveTab] = useState('inbox'); // inbox, contacts, pipelines, settings
   const [organizations, setOrganizations] = useState([]);
   const [selectedOrg, setSelectedOrg] = useState(null);
-  
+
   // Core CRM states
   const [contacts, setContacts] = useState([]);
   const [conversations, setConversations] = useState([]);
   const [messages, setMessages] = useState([]);
   const [activeConvId, setActiveConvId] = useState(null);
-  
+
   // Pipeline columns / stages
   const [stages, setStages] = useState([]);
-  
+
   // Global settings state
   const [settings, setSettings] = useState(null);
 
@@ -73,10 +75,10 @@ function App() {
     try {
       const response = await crmService.login(loginEmail, loginPassword, loginOrgId);
       const { token: receivedToken, user } = response;
-      
+
       localStorage.setItem('token', receivedToken);
       localStorage.setItem('user', JSON.stringify(user));
-      
+
       const matchedOrg = organizations.find(o => o.id === user.organizationId);
       if (matchedOrg) setSelectedOrg(matchedOrg);
 
@@ -94,13 +96,13 @@ function App() {
           role: 'admin',
           organizationId: loginOrgId || '1615f5c8-12cd-44c1-9038-f1c5d98e821b'
         };
-        
+
         localStorage.setItem('token', mockToken);
         localStorage.setItem('user', JSON.stringify(mockUser));
-        
+
         const matchedOrg = organizations.find(o => o.id === mockUser.organizationId);
         if (matchedOrg) setSelectedOrg(matchedOrg);
-        
+
         setToken(mockToken);
         setCurrentUser(mockUser);
         return;
@@ -167,7 +169,7 @@ function App() {
         const data = await crmService.getMessages(activeConvId);
         setMessages(data);
         // Clear locally tracked unread count
-        setConversations(prev => 
+        setConversations(prev =>
           prev.map(c => c.id === activeConvId ? { ...c, unread_count: 0 } : c)
         );
       } catch (err) {
@@ -182,7 +184,13 @@ function App() {
     if (!token || !currentUser || token === 'mock_jwt_token_for_preview') return;
 
     socketRef.current = io(SOCKET_URL, {
-      auth: { token }
+      auth: { token },
+      transports: ['websocket', 'polling'],
+      withCredentials: true
+    });
+
+    socketRef.current.on('connect_error', (error) => {
+      console.error('[Socket] Connection error:', error.message);
     });
 
     socketRef.current.on('connect', () => {
@@ -284,10 +292,10 @@ function App() {
   const handleStartConversation = async (contactId) => {
     try {
       const conv = await crmService.createConversation(contactId);
-      
+
       const convs = await crmService.getConversations('open');
       setConversations(convs);
-      
+
       setActiveConvId(conv.id);
       setActiveTab('inbox');
     } catch (err) {
@@ -314,7 +322,7 @@ function App() {
   const handleUpdateContactStage = async (contactId, stageId) => {
     try {
       await crmService.updateContact(contactId, { pipelineStageId: stageId });
-      setContacts(prev => 
+      setContacts(prev =>
         prev.map(c => c.id === contactId ? { ...c, pipeline_stage_id: stageId } : c)
       );
     } catch (err) {
@@ -327,12 +335,12 @@ function App() {
     try {
       const response = await crmService.sendMessage(conversationId, body, 'text', isInternal);
       setMessages(prev => [...prev, response]);
-      
+
       // Update preview context in threads list
-      setConversations(prev => 
-        prev.map(c => 
-          c.id === conversationId 
-            ? { ...c, preview: body, last_message_at: new Date().toISOString() } 
+      setConversations(prev =>
+        prev.map(c =>
+          c.id === conversationId
+            ? { ...c, preview: body, last_message_at: new Date().toISOString() }
             : c
         )
       );
@@ -350,7 +358,7 @@ function App() {
             created_at: new Date().toISOString()
           };
           setMessages(prev => [...prev, aiMsg]);
-          setConversations(prev => 
+          setConversations(prev =>
             prev.map(c => c.id === conversationId ? { ...c, preview: aiResponse, last_message_at: new Date().toISOString() } : c)
           );
         }, 1200);
@@ -401,7 +409,7 @@ function App() {
           <div className="space-y-4">
             <div className="flex flex-col gap-1.5">
               <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Organización</label>
-              <select 
+              <select
                 value={loginOrgId}
                 onChange={(e) => setLoginOrgId(e.target.value)}
                 className="glass-input rounded-lg px-3.5 py-2 text-sm text-slate-200 cursor-pointer"
@@ -414,8 +422,8 @@ function App() {
 
             <div className="flex flex-col gap-1.5">
               <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Correo Electrónico</label>
-              <input 
-                type="email" 
+              <input
+                type="email"
                 value={loginEmail}
                 onChange={(e) => setLoginEmail(e.target.value)}
                 className="glass-input rounded-lg px-3.5 py-2 text-sm text-slate-200"
@@ -426,8 +434,8 @@ function App() {
             <div className="flex flex-col gap-1.5">
               <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Contraseña</label>
               <div className="relative">
-                <input 
-                  type="password" 
+                <input
+                  type="password"
                   value={loginPassword}
                   onChange={(e) => setLoginPassword(e.target.value)}
                   className="glass-input rounded-lg pl-3.5 pr-10 py-2 text-sm text-slate-200 w-full"
@@ -438,8 +446,8 @@ function App() {
             </div>
           </div>
 
-          <button 
-            type="submit" 
+          <button
+            type="submit"
             className="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-semibold py-2.5 rounded-lg text-sm shadow-lg shadow-emerald-600/10 transition mt-2 active:scale-95"
           >
             Conectarse
@@ -451,9 +459,9 @@ function App() {
 
   return (
     <div className="flex h-screen overflow-hidden text-slate-100 bg-slate-950">
-      
+
       {/* modular SIDEBAR */}
-      <Sidebar 
+      <Sidebar
         activeTab={activeTab}
         setActiveTab={setActiveTab}
         currentUser={currentUser}
@@ -466,7 +474,7 @@ function App() {
 
       {/* MAIN CONTAINER */}
       <main className="flex-1 flex flex-col overflow-hidden bg-slate-950 relative">
-        
+
         {/* Glow gradients */}
         <div className="absolute top-0 right-1/4 w-[500px] h-[500px] bg-emerald-500/5 rounded-full blur-[120px] pointer-events-none"></div>
         <div className="absolute bottom-10 left-1/3 w-[600px] h-[600px] bg-violet-600/5 rounded-full blur-[140px] pointer-events-none"></div>
@@ -484,8 +492,8 @@ function App() {
           <div className="flex items-center gap-3">
             <div className="flex items-center bg-slate-900/60 border border-slate-800 rounded-lg px-3 py-1.5 gap-2">
               <Search className="w-4 h-4 text-slate-400" />
-              <input 
-                type="text" 
+              <input
+                type="text"
                 placeholder="Buscar lead..."
                 className="bg-transparent text-xs text-slate-200 outline-none w-48"
               />
@@ -501,7 +509,7 @@ function App() {
 
           {/* VIEW: INBOX */}
           {activeTab === 'inbox' && (
-            <Inbox 
+            <Inbox
               conversations={conversations}
               contacts={contacts}
               messages={messages}
@@ -517,7 +525,7 @@ function App() {
 
           {/* VIEW: CONTACTS */}
           {activeTab === 'contacts' && (
-            <Contacts 
+            <Contacts
               contacts={contacts}
               stages={stages}
               onCreateContact={handleCreateContact}
@@ -529,7 +537,7 @@ function App() {
 
           {/* VIEW: PIPELINES */}
           {activeTab === 'pipelines' && (
-            <Pipeline 
+            <Pipeline
               contacts={contacts}
               stages={stages}
               onStageChange={handleUpdateContactStage}
@@ -541,7 +549,7 @@ function App() {
 
           {/* VIEW: SETTINGS */}
           {activeTab === 'settings' && (
-            <Settings 
+            <Settings
               settings={settings}
               setSettings={setSettings}
               onSaveSettings={handleSaveSettings}
