@@ -77,6 +77,12 @@ class ContactController {
         ipAddress: req.ip,
       });
 
+      // Broadcast via Socket.io
+      const io = req.app.get('io');
+      if (io) {
+        io.to(orgId).emit('contact_created', newContact);
+      }
+
       return res.status(201).json(newContact);
     } catch (error) {
       console.error('[ContactController] create error:', error);
@@ -154,6 +160,12 @@ class ContactController {
         metadata: { contactId: id, name: updated.name, isTransition }
       });
 
+      // Broadcast via Socket.io
+      const io = req.app.get('io');
+      if (io) {
+        io.to(orgId).emit('contact_updated', updated);
+      }
+
       return res.json(updated);
     } catch (error) {
       console.error('[ContactController] update error:', error);
@@ -187,6 +199,12 @@ class ContactController {
         metadata: { contactId: id },
         ipAddress: req.ip,
       });
+
+      // Broadcast via Socket.io
+      const io = req.app.get('io');
+      if (io) {
+        io.to(orgId).emit('contact_deleted', { id });
+      }
 
       return res.json({ message: 'Contact soft deleted successfully' });
     } catch (error) {

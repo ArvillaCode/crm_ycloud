@@ -182,8 +182,7 @@ function App() {
     if (!token || !currentUser || token === 'mock_jwt_token_for_preview') return;
 
     socketRef.current = io(SOCKET_URL, {
-      auth: { token },
-      transports: ['websocket']
+      auth: { token }
     });
 
     socketRef.current.on('connect', () => {
@@ -218,6 +217,30 @@ function App() {
           }
           return c;
         });
+      });
+    });
+
+    socketRef.current.on('contact_created', (newContact) => {
+      setContacts(prev => {
+        if (prev.some(c => c.id === newContact.id)) return prev;
+        return [newContact, ...prev];
+      });
+    });
+
+    socketRef.current.on('contact_updated', (updatedContact) => {
+      setContacts(prev => prev.map(c => c.id === updatedContact.id ? updatedContact : c));
+    });
+
+    socketRef.current.on('contact_deleted', (data) => {
+      const { id } = data;
+      setContacts(prev => prev.filter(c => c.id !== id));
+      setConversations(prev => prev.filter(c => c.contact_id !== id));
+      setConversations(prev => {
+        const activeC = prev.find(c => c.id === activeConvId);
+        if (activeC && activeC.contact_id === id) {
+          setActiveConvId(null);
+        }
+        return prev;
       });
     });
 
